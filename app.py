@@ -83,4 +83,5 @@ def load(user_id):
     app.run(debug=True, port=5000)'''
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5001)  # 监听 0.0.0.0
+    port = int(os.environ.get("PORT", 5000))  # Railway 自动分配端口
+    app.run(host="0.0.0.0", port=port)
