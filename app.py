@@ -1,6 +1,8 @@
 from flask import Flask, render_template, jsonify, request, send_from_directory
 import os
 import pandas as pd
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 
 app = Flask(__name__)
 
@@ -9,6 +11,23 @@ FOLDER_A = "static/images/folder_A"
 FOLDER_B = "static/images/folder_B"
 EXCEL_FOLDER = "results"  # 存放 Excel 文件
 os.makedirs(EXCEL_FOLDER, exist_ok=True)
+
+# 连接 Google Sheets
+scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+creds = ServiceAccountCredentials.from_json_keyfile_name("google_credentials.json", scope)
+client = gspread.authorize(creds)
+sheet = client.open("SurveyResults").sheet1  # 选择工作表
+
+@app.route("/api/submit", methods=["POST"])
+def submit():
+    data = request.json
+    user_id = data.get("user_id")
+    answers = data.get("answers")
+
+    for image_name, score in answers.items():
+        sheet.append_row([user_id, image_name, score])
+
+    return jsonify({"status": "success", "message": "数据已保存到 Google Sheets！"})
 
 # 每份问卷的题目数量（每 300 题一组）
 QUESTIONS_PER_BATCH = 300
