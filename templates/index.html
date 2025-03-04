@@ -33,6 +33,7 @@
         let imagePairs = [];
         let answers = {};  // 用户的回答
 
+        // 加载用户历史数据
         fetch(`/api/load/${userId}`)
             .then(response => response.json())
             .then(data => {
@@ -62,12 +63,12 @@
                         <h3>照片对 ${index + 1}</h3>
                         <div class="image-container">
                             <div>
-                                <img src="${imagePair.img_A}" alt="照片 A">
-                                <p>照片 A</p>
+                                <img src="${imagePair.img_A}" alt="照片 A" onerror="this.style.display='none'">
+                                <p>${imagePair.image_name} - 照片 A</p>
                             </div>
                             <div>
-                                <img src="${imagePair.img_B}" alt="照片 B">
-                                <p>照片 B</p>
+                                <img src="${imagePair.img_B}" alt="照片 B" onerror="this.style.display='none'">
+                                <p>${imagePair.image_name} - 照片 B</p>
                             </div>
                         </div>
                         <div class="rating">
