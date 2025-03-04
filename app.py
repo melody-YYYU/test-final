@@ -5,6 +5,11 @@ import pandas as pd
 
 app = Flask(__name__)
 
+@app.route('/static/<path:filename>')
+def serve_static(filename):
+    """ 让 Flask 提供静态文件（Render & Railway 需要手动配置）"""
+    return send_from_directory("static", filename)
+
 # 存放图片的目录
 FOLDER_A = "static/images/folder_A"
 FOLDER_B = "static/images/folder_B"
