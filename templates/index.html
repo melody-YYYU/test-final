@@ -18,42 +18,44 @@
 </head>
 <body>
 
-    <h2>请对以下照片對中的內容進行感知相似度進行评分 (1-10)，1為相似度極低，10為相似度極高。
-        判斷的標準為裝飾紋樣、顏色、材料。
-        感知相似度：從人的角度對照片的內容進行是否相似的判斷，並選出相應分值</h2>
+    <h2>请输入问卷序号（1,2,3...）：</h2>
+    <input type="number" id="batch-id" min="1">
+    <button onclick="loadSurvey()">进入问卷</button>
 
-    <div id="questions-container">
-        <!-- 问题将动态加载 -->
-    </div>
-
+    <div id="questions-container"></div>
     <button id="submit-btn">提交评分</button>
 
     <script>
-        let userId = prompt("请输入您的用户ID：");  // 提示用户输入 ID
-        let imagePairs = [];
-        let answers = {};  // 用户的回答
+        let userId = prompt("请输入您的用户ID：");
+        let batchId;
+        let answers = {};
 
-        // 加载用户历史数据
-        fetch(`/api/load/${userId}`)
-            .then(response => response.json())
-            .then(data => {
-                if (data.answers) {
-                    answers = data.answers;
-                }
-                return fetch("/api/images");
-            })
-            .then(response => response.json())
-            .then(data => {
-                imagePairs = data.images;
-                if (imagePairs.length > 0) {
-                    showImagePairs();
-                } else {
-                    alert("没有找到可比较的图片对！");
-                }
-            })
-            .catch(error => console.error("无法加载用户历史数据:", error));
+        function loadSurvey() {
+            batchId = document.getElementById("batch-id").value;
+            if (!batchId) {
+                alert("请输入问卷编号！");
+                return;
+            }
 
-        function showImagePairs() {
+            // 先加载用户的历史数据
+            fetch(`/api/load/${userId}/${batchId}`)
+                .then(response => response.json())
+                .then(data => {
+                    answers = data.answers || {};
+                    return fetch(`/api/images/${batchId}`);
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        alert(data.error);
+                        return;
+                    }
+                    showImagePairs(data.images);
+                })
+                .catch(error => console.error("无法加载数据:", error));
+        }
+
+        function showImagePairs(imagePairs) {
             const questionsContainer = document.getElementById("questions-container");
             questionsContainer.innerHTML = "";
 
@@ -80,12 +82,14 @@
                 questionsContainer.innerHTML += questionHTML;
             });
 
+            // 自动恢复已选择的答案
             setTimeout(() => {
                 Object.keys(answers).forEach(imageName => {
                     const score = answers[imageName];
                     $(`button[data-name="${imageName}"][data-score="${score}"]`).addClass("selected");
                 });
 
+                // 跳转到尚未填写的题目
                 let incompleteQuestion = $(".question-container").filter(function() {
                     return !$(this).find(".rating button.selected").length;
                 }).first();
@@ -118,10 +122,15 @@
         });
 
         $("#submit-btn").click(function() {
+            if (!batchId) {
+                alert("请先输入问卷编号！");
+                return;
+            }
+
             fetch("/api/submit", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ user_id: userId, answers: answers })
+                body: JSON.stringify({ user_id: userId, batch_id: batchId, answers: answers })
             })
             .then(response => response.json())
             .then(data => {
