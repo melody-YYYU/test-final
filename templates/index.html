@@ -20,8 +20,8 @@
 <body>
 
     <h2>请输入问卷序号（1,2,3...）：请对以下照片對中的內容進行感知相似度進行评分 (1-10)，1為相似度極低，10為相似度極高。
-        判斷的標準為裝飾紋樣、顏色、材料。
-        感知相似度：從人的角度對照片的內容進行是否相似的判斷，並選出相應分值</h2>
+    判斷的標準為裝飾紋樣、顏色、材料。
+    感知相似度：從人的角度對照片的內容進行是否相似的判斷，並選出相應分值</h2>
     <input type="number" id="batch-id" min="1">
     <button onclick="loadSurvey()">进入问卷</button>
 
@@ -36,136 +36,180 @@
     <button id="submit-btn">提交评分</button>
 
     <script>
-        let userId = prompt("请输入您的用户ID：");
-        let batchId;
-        let answers = {};  // 存储所有已填写答案
-        let currentPage = 1;
-        let totalPages = 1;
+    let userId = prompt("请输入您的用户ID：");
+    let batchId;
+    let answers = {};  // 存储所有已填写答案
+    let currentPage = 1;
+    let totalPages = 1;
+    let questionsPerPage = 20;
+    let imagePairs = [];
 
-        function loadSurvey() {
-            batchId = document.getElementById("batch-id").value;
-            if (!batchId) {
-                alert("请输入问卷编号！");
-                return;
-            }
-
-            fetch(`/api/load/${userId}/${batchId}`)
-                .then(response => response.json())
-                .then(data => {
-                    answers = data.answers || {};
-                    return fetch(`/api/images/${batchId}/1`);
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.error) {
-                        alert(data.error);
-                        return;
-                    }
-                    totalPages = data.total_pages;
-                    currentPage = 1;
-                    updatePagination();
-                    showImagePairs();
-                })
-                .catch(error => console.error("无法加载数据:", error));
+    function loadSurvey() {
+        batchId = document.getElementById("batch-id").value;
+        if (!batchId) {
+            alert("请输入问卷编号！");
+            return;
         }
 
-        function updatePagination() {
-            $("#page-info").text(`第 ${currentPage} 页 / 共 ${totalPages} 页`);
-            $("#prev-btn").prop("disabled", currentPage === 1);
-            $("#next-btn").prop("disabled", currentPage === totalPages);
-        }
+        fetch(`/api/load/${userId}/${batchId}`)
+            .then(response => response.json())
+            .then(data => {
+                answers = data.answers || {};
+                return fetch(`/api/images/${batchId}/1`);
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert(data.error);
+                    return;
+                }
+                imagePairs = data.images;
+                totalPages = data.total_pages;
+                currentPage = 1;
+                updatePagination();
+                showImagePairs();
+            })
+            .catch(error => console.error("无法加载数据:", error));
+    }
 
-        function showImagePairs() {
-            fetch(`/api/images/${batchId}/${currentPage}`)
-                .then(response => response.json())
-                .then(data => {
-                    const questionsContainer = $("#questions-container").empty();
-                    data.images.forEach(imagePair => {
-                        let questionHTML = `
-                            <div class="question-container">
-                                <h3>照片对</h3>
-                                <div class="image-container">
-                                    <div>
-                                        <img src="${imagePair.img_A}" alt="照片 A">
-                                        <p>${imagePair.image_name} - 照片 A</p>
-                                    </div>
-                                    <div>
-                                        <img src="${imagePair.img_B}" alt="照片 B">
-                                        <p>${imagePair.image_name} - 照片 B</p>
-                                    </div>
+    function updatePagination() {
+        $("#page-info").text(`第 ${currentPage} 页 / 共 ${totalPages} 页`);
+        $("#prev-btn").prop("disabled", currentPage === 1);
+        $("#next-btn").prop("disabled", currentPage === totalPages);
+    }
+
+    function showImagePairs() {
+        fetch(`/api/images/${batchId}/${currentPage}`)
+            .then(response => response.json())
+            .then(data => {
+                const questionsContainer = $("#questions-container").empty();
+                data.images.forEach((imagePair, index) => {
+                    let questionHTML = `
+                        <div class="question-container" data-name="${imagePair.image_name}">
+                            <h3>照片对 ${index + 1}</h3>
+                            <div class="image-container">
+                                <div>
+                                    <img src="${imagePair.img_A}" alt="照片 A">
+                                    <p>${imagePair.image_name} - 照片 A</p>
                                 </div>
-                                <div class="rating">
-                                    <p>请给出感知相似度评分：</p>
-                                    ${createRatingButtons(imagePair.image_name)}
+                                <div>
+                                    <img src="${imagePair.img_B}" alt="照片 B">
+                                    <p>${imagePair.image_name} - 照片 B</p>
                                 </div>
                             </div>
-                        `;
-                        questionsContainer.append(questionHTML);
-                    });
+                            <div class="rating">
+                                <p>请给出感知相似度评分：</p>
+                                ${createRatingButtons(imagePair.image_name)}
+                            </div>
+                        </div>
+                    `;
+                    questionsContainer.append(questionHTML);
+                });
 
-                    restoreSelectedRatings();
-                })
-                .catch(error => console.error("加载图片失败:", error));
-        }
-
-        function createRatingButtons(imageName) {
-            let buttonsHTML = "";
-            for (let i = 1; i <= 10; i++) {
-                buttonsHTML += `<button class="rating-btn" data-score="${i}" data-name="${imageName}">${i}</button>`;
-            }
-            return buttonsHTML;
-        }
-
-        function restoreSelectedRatings() {
-            Object.keys(answers).forEach(imageName => {
-                let score = answers[imageName];
-                $(`button[data-name="${imageName}"][data-score="${score}"]`).addClass("selected");
+                restoreSelectedRatings();
+                $("html, body").animate({ scrollTop: 0 }, "fast"); // 翻页后回到顶部
             });
+    }
+
+    function createRatingButtons(imageName) {
+        let buttonsHTML = "";
+        for (let i = 1; i <= 10; i++) {
+            buttonsHTML += `<button class="rating-btn" data-score="${i}" data-name="${imageName}">${i}</button>`;
         }
+        return buttonsHTML;
+    }
 
-        $(document).on("click", ".rating-btn", function() {
-            let score = $(this).data("score");
-            let imageName = $(this).data("name");
-
-            $(`button[data-name="${imageName}"]`).removeClass("selected");
-            $(this).addClass("selected");
-
-            answers[imageName] = score;
+    function restoreSelectedRatings() {
+        Object.keys(answers).forEach(imageName => {
+            let score = answers[imageName];
+            $(`button[data-name="${imageName}"][data-score="${score}"]`).addClass("selected");
         });
+    }
 
-        $("#next-btn").click(function() {
-            saveCurrentPageData();
-            if (currentPage < totalPages) {
-                currentPage++;
+    $(document).on("click", ".rating-btn", function() {
+        let score = $(this).data("score");
+        let imageName = $(this).data("name");
+
+        $(`button[data-name="${imageName}"]`).removeClass("selected");
+        $(this).addClass("selected");
+
+        answers[imageName] = score;
+    });
+
+    $("#next-btn").click(function() {
+        saveCurrentPageData();
+        if (currentPage < totalPages) {
+            currentPage++;
+            updatePagination();
+            showImagePairs();
+        }
+    });
+
+    $("#prev-btn").click(function() {
+        saveCurrentPageData();
+        if (currentPage > 1) {
+            currentPage--;
+            updatePagination();
+            showImagePairs();
+        }
+    });
+
+    function saveCurrentPageData() {
+        fetch("/api/submit", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ user_id: userId, batch_id: batchId, answers: answers })
+        }).then(response => response.json())
+          .then(data => console.log("✅ 数据已保存！", data));
+    }
+
+    $("#submit-btn").click(function() {
+        let missingQuestion = findFirstUnansweredQuestion();
+
+        if (missingQuestion) {
+            alert("⚠️ 尚有问题未完成，可继续完成后退出！");
+            let missingPage = findPageOfQuestion(missingQuestion);
+            if (missingPage !== currentPage) {
+                currentPage = missingPage;
                 updatePagination();
                 showImagePairs();
+                setTimeout(() => {
+                    scrollToQuestion(missingQuestion);
+                }, 500);
+            } else {
+                scrollToQuestion(missingQuestion);
             }
-        });
-
-        $("#prev-btn").click(function() {
-            saveCurrentPageData();
-            if (currentPage > 1) {
-                currentPage--;
-                updatePagination();
-                showImagePairs();
-            }
-        });
-
-        function saveCurrentPageData() {
-            fetch("/api/submit", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ user_id: userId, batch_id: batchId, answers: answers })
-            }).then(response => response.json())
-              .then(data => console.log("✅ 数据已保存！", data));
-        }
-
-        $("#submit-btn").click(function() {
+        } else {
             saveCurrentPageData();
             alert("✅ 您已完成作答！所有数据已保存！");
-        });
+        }
+    });
 
-    </script>
+    function findFirstUnansweredQuestion() {
+        for (let i = 0; i < imagePairs.length; i++) {
+            if (!(imagePairs[i].image_name in answers)) {
+                return imagePairs[i].image_name;
+            }
+        }
+        return null;
+    }
+
+    function findPageOfQuestion(imageName) {
+        for (let i = 0; i < imagePairs.length; i++) {
+            if (imagePairs[i].image_name === imageName) {
+                return Math.floor(i / questionsPerPage) + 1;
+            }
+        }
+        return 1;
+    }
+
+    function scrollToQuestion(imageName) {
+        let target = $(`.question-container[data-name="${imageName}"]`);
+        if (target.length) {
+            $("html, body").animate({ scrollTop: target.offset().top }, "fast");
+        }
+    }
+</script>
 
 </body>
 </html>
