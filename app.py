@@ -42,6 +42,12 @@ class SurveyResult(db.Model):
     batch_id = db.Column(db.Integer, nullable=False)
     image_name = db.Column(db.String(100), nullable=False)
     score = db.Column(db.Integer, nullable=False)
+class UserInfo(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String(50), unique=True, nullable=False)  # 确保一个用户只存一次
+    gender = db.Column(db.String(10), nullable=False)
+    age = db.Column(db.Integer, nullable=False)
+    education = db.Column(db.String(20), nullable=False)
 
 @app.route('/static/<path:filename>')
 def serve_static(filename):
@@ -65,11 +71,6 @@ def get_images(batch_id, page):
     images = get_image_pairs()
     total_batches = len(images) // QUESTIONS_PER_BATCH + (1 if len(images) % QUESTIONS_PER_BATCH else 0)
 
-    if not images:
-        return jsonify({"error": "没有找到可用的图片数据，请检查文件夹路径"}), 404
-
-    total_batches = len(images) // QUESTIONS_PER_BATCH + (1 if len(images) % QUESTIONS_PER_BATCH else 0)
-
     if batch_id > total_batches or batch_id < 1:
         return jsonify({"error": "问卷编号超出范围", "total_batches": total_batches}), 400
 
@@ -90,12 +91,26 @@ def get_images(batch_id, page):
 
 @app.route("/api/submit", methods=["POST"])
 def submit():
-    """保存当前页的问卷答案"""
+    """保存当前页的问卷答案，并存储用户信息"""
     data = request.json
     user_id = data.get("user_id")
     batch_id = data.get("batch_id")
     answers = data.get("answers")
+    user_info = data.get("user_info")  # 获取用户信息
 
+    # 🔹 存储用户信息（如果未存储）
+    if user_info:
+        existing_user = UserInfo.query.filter_by(user_id=user_id).first()
+        if not existing_user:
+            new_user = UserInfo(
+                user_id=user_id,
+                gender=user_info.get("gender"),
+                age=user_info.get("age"),
+                education=user_info.get("education")
+            )
+            db.session.add(new_user)
+
+    # 🔹 存储评分数据
     for image_name, score in answers.items():
         existing_entry = SurveyResult.query.filter_by(user_id=user_id, batch_id=batch_id, image_name=image_name).first()
         if existing_entry:
@@ -103,16 +118,24 @@ def submit():
         else:
             new_entry = SurveyResult(user_id=user_id, batch_id=batch_id, image_name=image_name, score=score)
             db.session.add(new_entry)
-    db.session.commit()
 
+    db.session.commit()
     return jsonify({"status": "success", "message": "数据已保存！"})
 
 @app.route("/api/load/<user_id>/<int:batch_id>")
 def load(user_id, batch_id):
-    """加载用户已填的答案"""
+    """加载用户已填的答案，并返回用户信息"""
     results = SurveyResult.query.filter_by(user_id=user_id, batch_id=batch_id).all()
     answers = {entry.image_name: entry.score for entry in results}
-    return jsonify({"answers": answers})
+
+    user = UserInfo.query.filter_by(user_id=user_id).first()
+    user_info = {
+        "gender": user.gender if user else "",
+        "age": user.age if user else "",
+        "education": user.education if user else ""
+    }
+
+    return jsonify({"answers": answers, "user_info": user_info})
 
 with app.app_context():
     db.create_all()
