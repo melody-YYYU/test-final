@@ -13,45 +13,23 @@
         .rating button { padding: 10px; font-size: 16px; cursor: pointer; margin: 5px; border: 2px solid #ccc; border-radius: 5px; }
         .rating button.selected { background-color: #4CAF50; color: white; border: 2px solid #45a049; }
         .pagination { margin-top: 20px; }
-        .pagination button { padding: 10px; font-size: 16px; margin: 10px; }
+        .pagination button, .pagination select { padding: 10px; font-size: 16px; margin: 10px; }
         .question-container { margin-top: 30px; }
     </style>
 </head>
 <body>
 
-    <h2>请输入问卷序号（1,2,3,4,5,6,7,8,9）：请对以下照片對中的內容進行感知相似度進行评分 (1-10)，1為相似度極低，10為相似度極高。
+    <h2>请输入问卷序号（1,2,3...）：请对以下照片對中的內容進行感知相似度進行评分 (1-10)，1為相似度極低，10為相似度極高。
         判斷的標準為裝飾紋樣、顏色、材料。
         感知相似度：從人的角度對照片的內容進行是否相似的判斷，並選出相應分值</h2>
     <input type="number" id="batch-id" min="1">
     <button onclick="loadSurvey()">进入问卷</button>
 
-    <div id="user-info-form" style="display: none;">
-        <h3>请填写基本信息</h3>
-        <label>性别：</label>
-        <label><input type="radio" name="gender" value="男"> 男</label>
-        <label><input type="radio" name="gender" value="女"> 女</label>
-        <br><br>
-        <label>年龄：</label>
-        <input type="number" id="age" min="1" max="100">
-        <br><br>
-        <label>学历：</label>
-        <select id="education">
-            <option value="">请选择</option>
-            <option value="高中及以下">高中及以下</option>
-            <option value="本科">本科</option>
-            <option value="硕士">硕士</option>
-            <option value="博士">博士</option>
-        </select>
-        <br><br>
-        <button onclick="saveUserInfo()">提交信息</button>
-        <button onclick="skipUserInfo()">跳过</button>
-    </div>
-
-    <div id="questions-container" style="display: none;"></div>
+    <div id="questions-container"></div>
 
     <div class="pagination">
         <button id="prev-btn" disabled>上一页</button>
-        <span id="page-info"></span>
+        <select id="page-select"></select>
         <button id="next-btn" disabled>下一页</button>
     </div>
 
@@ -61,7 +39,6 @@
         let userId = prompt("请输入您的用户ID：");
         let batchId;
         let answers = {};
-        let userInfo = {};
         let currentPage = 1;
         let totalPages = 1;
         let questionsPerPage = 20;
@@ -74,38 +51,6 @@
                 return;
             }
 
-            fetch(`/api/load/${userId}/${batchId}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.user_info && data.user_info.gender) {
-                        skipUserInfo();
-                    } else {
-                        $("#user-info-form").show();
-                    }
-                })
-                .catch(error => console.error("无法加载用户信息:", error));
-        }
-
-        function skipUserInfo() {
-            $("#user-info-form").hide();
-            showQuestionnaire();
-        }
-
-        function saveUserInfo() {
-            let gender = $("input[name='gender']:checked").val();
-            let age = $("#age").val();
-            let education = $("#education").val();
-
-            if (!gender || !age || !education) {
-                alert("⚠️ 请填写所有信息！");
-                return;
-            }
-
-            userInfo = { gender, age, education };
-            showQuestionnaire();
-        }
-
-        function showQuestionnaire() {
             fetch(`/api/load/${userId}/${batchId}`)
                 .then(response => response.json())
                 .then(data => {
@@ -123,19 +68,22 @@
                     currentPage = 1;
                     updatePagination();
                     showImagePairs();
-                    $("#questions-container").show();
                 })
                 .catch(error => console.error("无法加载数据:", error));
         }
 
         function updatePagination() {
-            $("#page-info").text(`第 ${currentPage} 页 / 共 ${totalPages} 页`);
             $("#prev-btn").prop("disabled", currentPage === 1);
             $("#next-btn").prop("disabled", currentPage === totalPages);
+
+            let pageSelect = $("#page-select");
+            pageSelect.empty();
+            for (let i = 1; i <= totalPages; i++) {
+                pageSelect.append(`<option value="${i}" ${i === currentPage ? "selected" : ""}>第 ${i} 页</option>`);
+            }
         }
 
         function showImagePairs() {
-            $("#questions-container").empty();
             fetch(`/api/images/${batchId}/${currentPage}`)
                 .then(response => response.json())
                 .then(data => {
@@ -143,24 +91,35 @@
                         alert(data.error);
                         return;
                     }
+
+                    const questionsContainer = $("#questions-container").empty();
                     data.images.forEach((imagePair, index) => {
                         let questionHTML = `
                             <div class="question-container" data-index="${index}">
                                 <h3>照片对 ${index + 1}</h3>
                                 <div class="image-container">
-                                    <div><img src="${imagePair.img_A}" alt="照片 A"><p>${imagePair.image_name} - A</p></div>
-                                    <div><img src="${imagePair.img_B}" alt="照片 B"><p>${imagePair.image_name} - B</p></div>
+                                    <div>
+                                        <img src="${imagePair.img_A}" alt="照片 A">
+                                        <p>${imagePair.image_name} - 照片 A</p>
+                                    </div>
+                                    <div>
+                                        <img src="${imagePair.img_B}" alt="照片 B">
+                                        <p>${imagePair.image_name} - 照片 B</p>
+                                    </div>
                                 </div>
                                 <div class="rating">
                                     <p>请给出感知相似度评分：1-10，遵循相似度越高分值越高，可將5和6理解為是否相似的界值</p>
                                     ${createRatingButtons(imagePair.image_name)}
                                 </div>
-                            </div>`;
-                        $("#questions-container").append(questionHTML);
+                            </div>
+                        `;
+                        questionsContainer.append(questionHTML);
                     });
+
                     restoreSelectedRatings();
-                    $("html, body").animate({ scrollTop: 0 }, "fast");
                 });
+
+            $("html, body").animate({ scrollTop: 0 }, "fast");
         }
 
         function createRatingButtons(imageName) {
@@ -206,14 +165,45 @@
             }
         });
 
+        $("#page-select").change(function() {
+            saveCurrentPageData();
+            currentPage = parseInt($(this).val());
+            updatePagination();
+            showImagePairs();
+        });
+
         function saveCurrentPageData() {
             fetch("/api/submit", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ user_id: userId, batch_id: batchId, answers: answers, user_info: userInfo })
+                body: JSON.stringify({ user_id: userId, batch_id: batchId, answers: answers })
             }).then(response => response.json())
               .then(data => console.log("✅ 数据已保存！", data));
         }
+
+        $("#submit-btn").click(function() {
+            let unfilledQuestions = [];
+            $(".question-container").each(function() {
+                let index = $(this).data("index");
+                if (!$(this).find(".rating button.selected").length) {
+                    unfilledQuestions.push(index + 1);
+                }
+            });
+
+            if (unfilledQuestions.length > 0) {
+                alert(`⚠️ 尚有 ${unfilledQuestions.length} 题未完成！`);
+                let firstUnfilled = $(".question-container").filter(function() {
+                    return !$(this).find(".rating button.selected").length;
+                }).first();
+
+                if (firstUnfilled.length) {
+                    $("html, body").animate({ scrollTop: firstUnfilled.offset().top }, 500);
+                }
+            } else {
+                saveCurrentPageData();
+                alert("✅ 您已完成作答！所有数据已保存！");
+            }
+        });
     </script>
 
 </body>
