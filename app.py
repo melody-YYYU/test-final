@@ -98,29 +98,35 @@ def submit():
     answers = data.get("answers")
     user_info = data.get("user_info")  # 获取用户信息
 
-    # 🔹 存储用户信息（如果未存储）
-    if user_info:
-        existing_user = UserInfo.query.filter_by(user_id=user_id).first()
-        if not existing_user:
-            new_user = UserInfo(
-                user_id=user_id,
-                gender=user_info.get("gender"),
-                age=user_info.get("age"),
-                education=user_info.get("education")
-            )
-            db.session.add(new_user)
+    try:
+        # 🔹 存储用户信息（如果未存储）
+        if user_info:
+            existing_user = UserInfo.query.filter_by(user_id=user_id).first()
+            if not existing_user:
+                new_user = UserInfo(
+                    user_id=user_id,
+                    gender=user_info.get("gender"),
+                    age=user_info.get("age"),
+                    education=user_info.get("education")
+                )
+                db.session.add(new_user)
 
-    # 🔹 存储评分数据
-    for image_name, score in answers.items():
-        existing_entry = SurveyResult.query.filter_by(user_id=user_id, batch_id=batch_id, image_name=image_name).first()
-        if existing_entry:
-            existing_entry.score = score
-        else:
-            new_entry = SurveyResult(user_id=user_id, batch_id=batch_id, image_name=image_name, score=score)
-            db.session.add(new_entry)
+        # 🔹 存储评分数据
+        for image_name, score in answers.items():
+            existing_entry = SurveyResult.query.filter_by(user_id=user_id, batch_id=batch_id, image_name=image_name).first()
+            if existing_entry:
+                existing_entry.score = score
+            else:
+                new_entry = SurveyResult(user_id=user_id, batch_id=batch_id, image_name=image_name, score=score)
+                db.session.add(new_entry)
 
-    db.session.commit()
-    return jsonify({"status": "success", "message": "数据已保存！"})
+        db.session.commit()
+        print("✅ 数据成功存入数据库")
+        return jsonify({"status": "success", "message": "数据已保存！"})
+    except Exception as e:
+        print(f"❌ 提交失败: {e}")
+        db.session.rollback()  # 🔹 遇到错误时回滚事务
+        return jsonify({"error": "提交失败，请联系管理员"}), 500
 
 @app.route("/api/load/<user_id>/<int:batch_id>")
 def load(user_id, batch_id):
